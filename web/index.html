@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>מערבל מבחנים</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>🔀 מערבל מבחנים</h1>
+      <p class="subtitle">
+        העלו מבחן עם שאלות אמריקאיות בקובץ Word או PDF — קבלו גרסאות מעורבבות + תשובון
+      </p>
+    </header>
+
+    <main>
+      <section id="drop-zone" class="drop-zone">
+        <input type="file" id="file-input" accept=".docx,.pdf" multiple hidden />
+        <div class="drop-inner">
+          <div class="drop-icon">📄</div>
+          <p><strong>גררו לכאן קובץ מבחן</strong> או לחצו לבחירה</p>
+          <p class="hint">‎.docx / .pdf — אפשר גם כמה קבצים יחד</p>
+        </div>
+      </section>
+
+      <section id="parse-status" class="parse-status" hidden></section>
+
+      <section id="editor" hidden>
+        <div class="editor-header">
+          <h2>שאלות שזוהו (<span id="q-count">0</span>)</h2>
+          <p class="hint">
+            אפשר לערוך כל שאלה ותשובה, לסמן את התשובה הנכונה (לחיצה על העיגול) ולמחוק שאלות.
+            תשובה שסומנה מודגשת בקובץ המקור או מסומנת ב־* זוהתה אוטומטית.
+          </p>
+        </div>
+        <div id="question-list" class="question-list"></div>
+
+        <div class="settings card">
+          <h2>הגדרות ערבוב</h2>
+          <div class="settings-grid">
+            <label class="field">
+              <span>שם המבחן</span>
+              <input type="text" id="exam-title" value="מבחן" />
+            </label>
+            <label class="field">
+              <span>מספר גרסאות</span>
+              <input type="number" id="num-versions" min="1" max="26" value="4" />
+            </label>
+            <label class="check">
+              <input type="checkbox" id="shuffle-questions" checked />
+              <span>ערבוב סדר השאלות</span>
+            </label>
+            <label class="check">
+              <input type="checkbox" id="shuffle-options" checked />
+              <span>ערבוב סדר התשובות בכל שאלה</span>
+            </label>
+            <label class="check">
+              <input type="checkbox" id="pin-special" checked />
+              <span>להשאיר במקום תשובות כמו "כל התשובות נכונות"</span>
+            </label>
+          </div>
+          <div class="actions">
+            <button id="generate-btn" class="primary">🎲 צור גרסאות והורד</button>
+            <button id="simulate-btn" class="primary alt">🎓 סימולציית מבחן</button>
+            <button id="reset-btn" class="ghost">התחלה מחדש</button>
+          </div>
+          <p id="generate-status" class="generate-status"></p>
+        </div>
+      </section>
+
+      <section id="simulator" hidden>
+        <div class="card sim-header">
+          <h2>🎓 סימולציית מבחן</h2>
+          <p class="hint">
+            10 שאלות אקראיות מהמאגר. סמנו תשובה לכל שאלה — הציון והמשוב יוצגו רק
+            בסוף, לאחר בדיקה עצמאית של ChatGPT.
+          </p>
+          <p id="sim-status" class="generate-status"></p>
+        </div>
+        <div id="sim-questions" class="question-list"></div>
+        <div id="sim-actions" class="actions sim-actions">
+          <button id="sim-finish" class="primary">✔ סיום ובדיקת המבחן</button>
+          <button id="sim-exit" class="ghost">יציאה בלי לסיים</button>
+        </div>
+        <div id="sim-results" hidden></div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

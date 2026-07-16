@@ -1,0 +1,21 @@
+{
+  "name": "testmixer-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "docx": "^9.5.0",
+    "file-saver": "^2.0.5",
+    "mammoth": "^1.11.0",
+    "pdfjs-dist": "^4.10.38"
+  },
+  "devDependencies": {
+    "pdf-lib": "^1.17.1",
+    "vite": "^6.3.5"
+  }
+}

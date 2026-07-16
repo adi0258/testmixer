@@ -41,6 +41,14 @@ node_modules/
 npm-debug.log
 yarn-error.log
 
+# environment secrets (API keys) — never commit
+.env
+.env.local
+.env.*.local
+
+# build output
+web/dist/
+
 # fastlane
 #
 # It is recommended to not store the screenshots in the git repo. Instead, use fastlane to re-generate the
