@@ -3,6 +3,7 @@ import { parseQuestions } from './parse.js';
 import { generateVersions } from './shuffle.js';
 import { exportAll } from './export.js';
 import { initSimulator, startSimulation } from './simulator.js';
+import { imageStrip } from './lightbox.js';
 
 const HEB_LETTERS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז'];
 
@@ -17,6 +18,13 @@ const resetBtn = document.getElementById('reset-btn');
 const generateStatus = document.getElementById('generate-status');
 
 let questions = [];
+const seenKeys = new Set();
+
+// Normalized fingerprint used to drop duplicate questions across files
+// (the same exam often appears both as a test file and a solutions file).
+function questionKey(q) {
+  return q.text.replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase();
+}
 
 // --- file intake -----------------------------------------------------------
 
@@ -39,29 +47,47 @@ fileInput.addEventListener('change', () => {
 async function handleFiles(files) {
   if (!files.length) return;
   showStatus('⏳ קורא את הקבצים…', false);
-  const added = [];
+  let added = 0;
+  let duplicates = 0;
+  const skipped = [];
   const errors = [];
+
   for (const file of files) {
     try {
       const lines = await extractLines(file);
       const parsed = parseQuestions(lines);
       if (parsed.length === 0) {
-        errors.push(`${file.name}: לא זוהו שאלות אמריקאיות בקובץ`);
-      } else {
-        added.push(...parsed);
+        skipped.push(file.name);
+        continue;
+      }
+      for (const q of parsed) {
+        const key = questionKey(q);
+        if (seenKeys.has(key)) {
+          duplicates++;
+          continue;
+        }
+        seenKeys.add(key);
+        questions.push(q);
+        added++;
       }
     } catch (err) {
       console.error(err);
       errors.push(`${file.name}: ${err.message}`);
     }
   }
-  questions.push(...added);
+
   render();
-  if (errors.length) {
-    showStatus(`⚠️ ${errors.join(' | ')}`, true);
-  } else {
-    showStatus(`✅ זוהו ${added.length} שאלות מ־${files.length} קבצים`, false);
+
+  const parts = [];
+  if (added) parts.push(`✅ נוספו ${added} שאלות למאגר (סה"כ ${questions.length})`);
+  if (duplicates) parts.push(`${duplicates} שאלות כפולות דולגו`);
+  if (skipped.length) {
+    parts.push(
+      `לא זוהו שאלות ב־${skipped.length} קבצים (ייתכן שאלו קובצי תשובות/פתרון): ${skipped.join(', ')}`,
+    );
   }
+  if (errors.length) parts.push(`שגיאות: ${errors.join(' | ')}`);
+  showStatus(parts.join(' · '), added === 0);
 }
 
 function showStatus(msg, isError) {
@@ -70,7 +96,7 @@ function showStatus(msg, isError) {
   parseStatus.classList.toggle('error', isError);
 }
 
-// --- editor rendering ------------------------------------------------------
+// --- question pool rendering (read-only) ------------------------------------
 
 function render() {
   editor.hidden = questions.length === 0;
@@ -91,17 +117,16 @@ function renderQuestion(q, qi) {
   num.className = 'q-num';
   num.textContent = qi + 1;
 
-  const qText = document.createElement('textarea');
+  const qText = document.createElement('div');
   qText.className = 'q-text';
-  qText.rows = 1;
-  qText.value = q.text;
-  qText.addEventListener('input', () => (q.text = qText.value));
+  qText.textContent = q.text;
 
   const del = document.createElement('button');
   del.className = 'q-delete';
-  del.title = 'מחיקת שאלה';
+  del.title = 'מחיקת שאלה מהמאגר';
   del.textContent = '🗑️';
   del.addEventListener('click', () => {
+    seenKeys.delete(questionKey(q));
     questions.splice(qi, 1);
     render();
   });
@@ -109,16 +134,7 @@ function renderQuestion(q, qi) {
   head.append(num, qText, del);
   card.append(head);
 
-  if (q.images && q.images.length) {
-    const imgWrap = document.createElement('div');
-    imgWrap.className = 'q-images';
-    for (const src of q.images) {
-      const img = document.createElement('img');
-      img.src = src;
-      imgWrap.append(img);
-    }
-    card.append(imgWrap);
-  }
+  if (q.images && q.images.length) card.append(imageStrip(q.images));
 
   q.options.forEach((opt, oi) => {
     const row = document.createElement('div');
@@ -126,7 +142,7 @@ function renderQuestion(q, qi) {
 
     const correct = document.createElement('button');
     correct.className = 'opt-correct' + (opt.correct ? ' checked' : '');
-    correct.title = 'סימון כתשובה נכונה';
+    correct.title = 'סימון כתשובה נכונה (לתשובון של המבחן המעורבב)';
     correct.addEventListener('click', () => {
       const wasCorrect = opt.correct;
       q.options.forEach((o) => (o.correct = false));
@@ -138,10 +154,9 @@ function renderQuestion(q, qi) {
     letter.className = 'opt-letter';
     letter.textContent = `${HEB_LETTERS[oi] ?? oi + 1}.`;
 
-    const optText = document.createElement('input');
+    const optText = document.createElement('div');
     optText.className = 'opt-text';
-    optText.value = opt.text;
-    optText.addEventListener('input', () => (opt.text = optText.value));
+    optText.textContent = opt.text;
 
     row.append(correct, letter, optText);
     card.append(row);
@@ -150,27 +165,23 @@ function renderQuestion(q, qi) {
   return card;
 }
 
-// --- generation ------------------------------------------------------------
+// --- shuffled exam download --------------------------------------------------
 
 generateBtn.addEventListener('click', async () => {
   if (questions.length === 0) return;
-  const settings = {
-    numVersions: Math.min(
-      26,
-      Math.max(1, parseInt(document.getElementById('num-versions').value, 10) || 1),
-    ),
-    shuffleQuestions: document.getElementById('shuffle-questions').checked,
-    shuffleOptions: document.getElementById('shuffle-options').checked,
-    pinSpecial: document.getElementById('pin-special').checked,
-  };
   const title = document.getElementById('exam-title').value.trim() || 'מבחן';
 
   generateBtn.disabled = true;
   generateStatus.textContent = '⏳ יוצר קבצים…';
   try {
-    const versions = generateVersions(questions, settings);
+    const versions = generateVersions(questions, {
+      numVersions: 1,
+      shuffleQuestions: true,
+      shuffleOptions: true,
+      pinSpecial: true,
+    });
     await exportAll(title, versions);
-    generateStatus.textContent = `✅ הורדו ${versions.length} גרסאות + תשובון`;
+    generateStatus.textContent = '✅ הורדו מבחן מעורבב + תשובון';
   } catch (err) {
     console.error(err);
     generateStatus.textContent = `שגיאה ביצירת הקבצים: ${err.message}`;
@@ -179,7 +190,7 @@ generateBtn.addEventListener('click', async () => {
   }
 });
 
-// --- simulator -------------------------------------------------------------
+// --- simulator ---------------------------------------------------------------
 
 initSimulator({
   onExit: () => {
@@ -199,6 +210,7 @@ document.getElementById('simulate-btn').addEventListener('click', () => {
 
 resetBtn.addEventListener('click', () => {
   questions = [];
+  seenKeys.clear();
   parseStatus.hidden = true;
   generateStatus.textContent = '';
   render();

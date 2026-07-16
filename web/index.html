@@ -4,14 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>מערבל מבחנים</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&family=Suez+One&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <header class="topbar">
-      <h1>🔀 מערבל מבחנים</h1>
-      <p class="subtitle">
-        העלו מבחן עם שאלות אמריקאיות בקובץ Word או PDF — קבלו גרסאות מעורבבות + תשובון
-      </p>
+      <div class="topbar-inner">
+        <h1>מערבל מבחנים</h1>
+        <p class="subtitle">
+          מעלים מבחנים ב־Word או PDF, מתרגלים בסימולציה עם בדיקה חכמה — ומורידים
+          מבחן מעורבב מוכן להדפסה
+        </p>
+      </div>
     </header>
 
     <main>
@@ -19,8 +28,8 @@
         <input type="file" id="file-input" accept=".docx,.pdf" multiple hidden />
         <div class="drop-inner">
           <div class="drop-icon">📄</div>
-          <p><strong>גררו לכאן קובץ מבחן</strong> או לחצו לבחירה</p>
-          <p class="hint">‎.docx / .pdf — אפשר גם כמה קבצים יחד</p>
+          <p class="drop-title">גררו לכאן קבצי מבחן או לחצו לבחירה</p>
+          <p class="hint">‎.docx / .pdf · אפשר כמה קבצים יחד — כל השאלות מצטרפות למאגר אחד</p>
         </div>
       </section>
 
@@ -28,42 +37,25 @@
 
       <section id="editor" hidden>
         <div class="editor-header">
-          <h2>שאלות שזוהו (<span id="q-count">0</span>)</h2>
+          <h2>המאגר שלי <span class="count-badge" id="q-count">0</span></h2>
           <p class="hint">
-            אפשר לערוך כל שאלה ותשובה, לסמן את התשובה הנכונה (לחיצה על העיגול) ולמחוק שאלות.
-            תשובה שסומנה מודגשת בקובץ המקור או מסומנת ב־* זוהתה אוטומטית.
+            השאלות מוצגות לקריאה בלבד. אפשר למחוק שאלה שזוהתה לא נכון, וללחוץ על
+            תמונה כדי להגדיל אותה.
           </p>
         </div>
         <div id="question-list" class="question-list"></div>
 
         <div class="settings card">
-          <h2>הגדרות ערבוב</h2>
-          <div class="settings-grid">
-            <label class="field">
-              <span>שם המבחן</span>
-              <input type="text" id="exam-title" value="מבחן" />
-            </label>
-            <label class="field">
-              <span>מספר גרסאות</span>
-              <input type="number" id="num-versions" min="1" max="26" value="4" />
-            </label>
-            <label class="check">
-              <input type="checkbox" id="shuffle-questions" checked />
-              <span>ערבוב סדר השאלות</span>
-            </label>
-            <label class="check">
-              <input type="checkbox" id="shuffle-options" checked />
-              <span>ערבוב סדר התשובות בכל שאלה</span>
-            </label>
-            <label class="check">
-              <input type="checkbox" id="pin-special" checked />
-              <span>להשאיר במקום תשובות כמו "כל התשובות נכונות"</span>
-            </label>
-          </div>
+          <label class="field">
+            <span>שם המבחן</span>
+            <input type="text" id="exam-title" value="מבחן" />
+          </label>
           <div class="actions">
-            <button id="generate-btn" class="primary">🎲 צור גרסאות והורד</button>
-            <button id="simulate-btn" class="primary alt">🎓 סימולציית מבחן</button>
-            <button id="reset-btn" class="ghost">התחלה מחדש</button>
+            <button id="simulate-btn" class="primary">🎓 התחל סימולציה</button>
+            <button id="generate-btn" class="secondary">
+              ⬇ הורדת מבחן מעורבב + תשובון
+            </button>
+            <button id="reset-btn" class="ghost">איפוס המאגר</button>
           </div>
           <p id="generate-status" class="generate-status"></p>
         </div>
@@ -86,6 +78,10 @@
         <div id="sim-results" hidden></div>
       </section>
     </main>
+
+    <footer class="site-footer">
+      <p>© 2026 Adi Tapiero · כל הזכויות שמורות</p>
+    </footer>
 
     <script type="module" src="/src/main.js"></script>
   </body>

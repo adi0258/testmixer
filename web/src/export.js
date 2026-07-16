@@ -68,9 +68,9 @@ async function imageParagraph(src) {
   });
 }
 
-export async function buildVersionDoc(title, version) {
+export async function buildVersionDoc(title, version, { single = false } = {}) {
   const children = [
-    para(`${title} — גרסה ${version.label}`, {
+    para(single ? title : `${title} — גרסה ${version.label}`, {
       bold: true,
       size: 32,
       spaceAfter: 120,
@@ -109,8 +109,11 @@ export function buildAnswerKeyDoc(title, versions) {
     v.questions.some((q) => q.options.some((o) => o.correct)),
   );
 
+  const single = versions.length === 1;
   for (const version of versions) {
-    children.push(para(`גרסה ${version.label}`, { bold: true, size: 28, spaceAfter: 100 }));
+    if (!single) {
+      children.push(para(`גרסה ${version.label}`, { bold: true, size: 28, spaceAfter: 100 }));
+    }
     version.questions.forEach((q, qi) => {
       const hebrew = isHebrew(q.text);
       const lets = letters(hebrew);
@@ -143,9 +146,11 @@ export function buildAnswerKeyDoc(title, versions) {
 
 export async function exportAll(title, versions) {
   const safeTitle = (title || 'מבחן').replace(/[\\/:*?"<>|]/g, '_');
+  const single = versions.length === 1;
   for (const version of versions) {
-    const blob = await Packer.toBlob(await buildVersionDoc(title, version));
-    saveAs(blob, `${safeTitle} - גרסה ${version.label}.docx`);
+    const blob = await Packer.toBlob(await buildVersionDoc(title, version, { single }));
+    const suffix = single ? 'מעורבב' : `גרסה ${version.label}`;
+    saveAs(blob, `${safeTitle} - ${suffix}.docx`);
   }
   const keyBlob = await Packer.toBlob(buildAnswerKeyDoc(title, versions));
   saveAs(keyBlob, `${safeTitle} - תשובון.docx`);

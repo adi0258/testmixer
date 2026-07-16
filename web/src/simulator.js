@@ -3,6 +3,8 @@
 // (the model determines correct answers itself — the source document's
 // marking is never trusted).
 
+import { imageStrip } from './lightbox.js';
+
 const SIM_SIZE = 10;
 const HEB_LETTERS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז'];
 
@@ -84,16 +86,7 @@ function renderQuestions() {
       head.append(num, text);
       card.append(head);
 
-      if (q.images.length) {
-        const imgWrap = document.createElement('div');
-        imgWrap.className = 'q-images';
-        for (const src of q.images) {
-          const img = document.createElement('img');
-          img.src = src;
-          imgWrap.append(img);
-        }
-        card.append(imgWrap);
-      }
+      if (q.images.length) card.append(imageStrip(q.images));
 
       q.options.forEach((opt, oi) => {
         const row = document.createElement('label');
@@ -109,6 +102,7 @@ function renderQuestions() {
         letter.className = 'opt-letter';
         letter.textContent = `${HEB_LETTERS[oi] ?? oi + 1}.`;
         const txt = document.createElement('span');
+        txt.className = 'opt-body';
         txt.textContent = opt;
         row.append(radio, letter, txt);
         card.append(row);
