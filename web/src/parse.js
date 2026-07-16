@@ -13,7 +13,11 @@
 const HEB_LETTERS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז'];
 const LAT_LETTERS = ['a', 'b', 'c', 'd', 'e', 'f'];
 
-const LINE_QUESTION_WORD_RE = /^שאלה\s+(?:מספר\s+)?(\d{1,3})\s*[:.)־–-]?\s*(.*)$/;
+const LINE_QUESTION_WORD_RE =
+  /^שאלה\s+(?:מס(?:פר)?['׳.]?\s*)?(\d{1,3})\s*[:.)־–-]?\s*(.*)$/;
+// A table cell holding just the option letter ("א" without a dot); the
+// option text arrives in the following cell/line.
+const BARE_LETTER_RE = /^([אבגדהוז])['׳]?$/;
 const LINE_OPTION_RE = /^(\*?)\s*([אבגדהוז]|[a-fA-F])\s*['׳]?\s*[.):]\s+(.*)$/;
 const LATIN_OPTION_RE = /^(\*?)\s*([a-fA-F])\s*[.):]\s+(.*)$/;
 const ANSWER_LINE_RE =
@@ -81,15 +85,64 @@ export function parseQuestions(lines) {
     }
   };
 
+  // Some RTL documents store option markers AFTER their text (visual order):
+  // "שאלה? setup, loop א. Serial.begin ב. ... ד." — the text before each
+  // marker is that marker's answer. Detect the signature (text between the
+  // question mark and "א.", empty text after the last marker) and rewrite
+  // the line into normal marker-before form.
+  const fixTrailingMarkerLayout = (text) => {
+    const re = /\s(\*?)([אבגדהוז])['׳]?[.)](?=\s|$)/g;
+    const marks = [];
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      marks.push({ i: m.index, end: m.index + m[0].length, letter: m[2] });
+    }
+    if (marks.length < 2) return text;
+    for (let k = 0; k < marks.length; k++) {
+      if (letterIndex(marks[k].letter) !== k) return text;
+    }
+    const afterLast = text.slice(marks[marks.length - 1].end).trim();
+    if (afterLast && !/^\d{1,3}[.)](\s|$)/.test(afterLast)) return text;
+    const head = text.slice(0, marks[0].i);
+    const qEnd = Math.max(head.lastIndexOf('?'), head.lastIndexOf(':'));
+    if (qEnd === -1) return text;
+    const firstBody = head.slice(qEnd + 1).trim();
+    if (!firstBody) return text; // normal marker-before layout
+    const bodies = [firstBody];
+    for (let k = 0; k < marks.length - 1; k++) {
+      bodies.push(text.slice(marks[k].end, marks[k + 1].i).trim());
+    }
+    let out = head.slice(0, qEnd + 1);
+    marks.forEach((mk, k) => {
+      out += ` ${mk.letter}. ${bodies[k]}`;
+    });
+    if (afterLast) out += ` ${afterLast}`;
+    return out;
+  };
+
   // Scans a plain text line, splitting it on inline question/option markers.
   // Merged paragraphs like "2. שאלה? א. כן ב. לא 3. שאלה הבאה" are handled
   // by processing each accepted marker incrementally against live state.
   const processTextChunk = (rawText, bold) => {
     let text = rawText;
 
+    // Bare option letter (a table cell such as "א") — the option text
+    // follows on the next line(s).
+    const bare = text.match(BARE_LETTER_RE);
+    if (bare && current && letterIndex(bare[1]) === current.options.length) {
+      startOption('', false);
+      return;
+    }
+
     // "שאלה 2: גוף" → normalize to "2. גוף" so the number scanner sees it.
     const qWord = text.match(LINE_QUESTION_WORD_RE);
-    if (qWord) text = `${qWord[1]}. ${qWord[2]}`;
+    if (qWord) {
+      // Drop a points annotation like "(10 נק')" from the question head.
+      const body = qWord[2].replace(/^\([^)]*נק[^)]*\)\s*/, '');
+      text = `${qWord[1]}. ${body}`;
+    }
+
+    text = fixTrailingMarkerLayout(text);
 
     // Latin option at line start (a. / B) ...) — not scanned mid-line to
     // avoid false positives inside English sentences.
@@ -120,17 +173,16 @@ export function parseQuestions(lines) {
       } else {
         // question number
         const num = parseInt(m[3], 10);
+        // At line start a numbered marker starts a new question even when a
+        // stale question with no options is open (e.g. a swallowed preamble
+        // list item) — closeCurrent() drops such invalid questions anyway.
         const acceptable = atLineStart
           ? !current || inOptions || current.options.length === 0
           : lastQNum !== null && num === lastQNum + 1 && inOptions;
-        if (acceptable && (!current || inOptions)) {
+        if (acceptable) {
           if (head) appendText(head, false);
           startQuestion('', num);
           pos = m.index + m[0].length;
-        } else if (acceptable && atLineStart) {
-          // A numbered line inside an open question with no options yet —
-          // treat as continuation (e.g. a numbered code snippet).
-          lastQNum = num;
         }
       }
     }
@@ -205,6 +257,8 @@ export function parseQuestions(lines) {
   const clean = [];
   for (const q of questions) {
     q.options = q.options.filter((o) => o.text);
+    // Strip a leftover points annotation ("10 נק'") from the question head.
+    q.text = q.text.replace(/^[\s()]*\d{0,3}\s*נק['׳]?[\s()]*/, '').trim();
     if (!q.text || q.options.length < 2) continue;
     let seen = false;
     for (const o of q.options) {

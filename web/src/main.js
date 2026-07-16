@@ -88,6 +88,63 @@ async function handleFiles(files) {
   }
   if (errors.length) parts.push(`שגיאות: ${errors.join(' | ')}`);
   showStatus(parts.join(' · '), added === 0);
+
+  if (added) validateNewQuestions(parts);
+}
+
+// Asks ChatGPT to sanity-check freshly added questions: do the options
+// logically belong to their question? Flags suspicious ones in the UI.
+async function validateNewQuestions(statusParts) {
+  const pending = questions.filter((q) => q.checked === undefined);
+  if (!pending.length) return;
+  pending.forEach((q) => (q.checked = false));
+
+  const BATCH = 8;
+  let flagged = 0;
+  let failed = false;
+  for (let i = 0; i < pending.length; i += BATCH) {
+    const batch = pending.slice(i, i + BATCH);
+    showStatus(
+      `${statusParts.join(' · ')} · 🔍 ChatGPT בודק התאמה בין שאלות לתשובות… (${Math.min(i + BATCH, pending.length)}/${pending.length})`,
+      false,
+    );
+    try {
+      const res = await fetch('/api/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questions: batch.map((q, bi) => ({
+            id: bi + 1,
+            text: q.text,
+            options: q.options.map((o) => o.text),
+          })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      for (const check of data.checks) {
+        const q = batch[check.id - 1];
+        if (!q) continue;
+        q.checked = true;
+        if (check.ok === false) {
+          q.flag = check.issue || 'ייתכן שהשאלה חולצה לא נכון';
+          flagged++;
+        }
+      }
+    } catch (err) {
+      console.error('validate failed:', err);
+      failed = true;
+      break;
+    }
+  }
+
+  render();
+  const suffix = failed
+    ? 'בדיקת האיכות לא הושלמה (שגיאת רשת/API)'
+    : flagged
+      ? `⚠️ ChatGPT סימן ${flagged} שאלות חשודות — כדאי לעבור עליהן ולמחוק את השגויות`
+      : '✅ ChatGPT אישר: כל השאלות נראות תקינות';
+  showStatus(`${statusParts.join(' · ')} · ${suffix}`, false);
 }
 
 function showStatus(msg, isError) {
@@ -108,7 +165,7 @@ function render() {
 
 function renderQuestion(q, qi) {
   const card = document.createElement('div');
-  card.className = 'card q-card';
+  card.className = 'card q-card' + (q.flag ? ' q-card-flagged' : '');
 
   const head = document.createElement('div');
   head.className = 'q-head';
@@ -133,6 +190,13 @@ function renderQuestion(q, qi) {
 
   head.append(num, qText, del);
   card.append(head);
+
+  if (q.flag) {
+    const flag = document.createElement('div');
+    flag.className = 'q-flag';
+    flag.textContent = `⚠️ ChatGPT: ${q.flag}`;
+    card.append(flag);
+  }
 
   if (q.images && q.images.length) card.append(imageStrip(q.images));
 
@@ -197,15 +261,22 @@ initSimulator({
     editor.hidden = questions.length === 0;
     dropZone.hidden = false;
   },
-  getPool: () => questions,
+  getPool: simulationPool,
 });
+
+// Prefer questions ChatGPT didn't flag as mismatched; fall back to the full
+// pool if too few clean questions are available yet.
+function simulationPool() {
+  const clean = questions.filter((q) => !q.flag);
+  return clean.length >= 4 ? clean : questions;
+}
 
 document.getElementById('simulate-btn').addEventListener('click', () => {
   if (questions.length === 0) return;
   editor.hidden = true;
   dropZone.hidden = true;
   parseStatus.hidden = true;
-  startSimulation(questions);
+  startSimulation(simulationPool());
 });
 
 resetBtn.addEventListener('click', () => {

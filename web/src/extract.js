@@ -30,6 +30,9 @@ export async function extractLines(file) {
 
 // --- docx -------------------------------------------------------------------
 
+// Invisible bidi control marks (RLM/LRM etc.) break marker regexes like "א."
+const BIDI_MARKS_RE = /[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g;
+
 const IMAGE_MIME = {
   png: 'image/png',
   jpg: 'image/jpeg',
@@ -186,7 +189,7 @@ function extractDocx(arrayBuffer) {
     }
 
     fragments.forEach((f, i) => {
-      const text = f.text.replace(/\s+/g, ' ').trim();
+      const text = f.text.replace(BIDI_MARKS_RE, '').replace(/\s+/g, ' ').trim();
       if (!text && !(i === 0 && paraImages.length)) return;
       lines.push({
         text,
@@ -225,25 +228,96 @@ async function extractPdf(arrayBuffer) {
       if (!item.str || !item.str.trim()) continue;
       const y = Math.round(item.transform[5] / 3) * 3;
       if (!rows.has(y)) rows.set(y, []);
-      rows.get(y).push({ x: item.transform[4], str: item.str });
+      rows.get(y).push({
+        x: item.transform[4],
+        w: item.width || 0,
+        str: item.str.replace(BIDI_MARKS_RE, '').replace(/\s+/g, ' '),
+      });
     }
     const sortedYs = [...rows.keys()].sort((a, b) => b - a);
     for (const y of sortedYs) {
-      const parts = rows.get(y).sort((a, b) => a.x - b.x);
-      let text = parts.map((p) => p.str).join(' ').replace(/\s+/g, ' ').trim();
-      // PDFs sometimes store Hebrew in visual (reversed) order; flip a line
-      // whose punctuation pattern gives that away.
-      if (looksVisuallyReversedHebrew(text)) {
-        text = text.split(' ').reverse().join(' ');
-      }
+      const text = reconstructPdfLine(rows.get(y));
       if (text) lines.push({ text, bold: false, images: [] });
     }
   }
   return lines;
 }
 
-function looksVisuallyReversedHebrew(text) {
-  // Hebrew text stored visually ends up with punctuation like ".1" at the
-  // start-of-string when it logically belongs at the line start ("1.").
-  return /[֐-׿]/.test(text) && /^[.)]\d{1,3}(\s|$)/.test(text);
+const BRACKET_MIRROR = {
+  '(': ')',
+  ')': '(',
+  '[': ']',
+  ']': '[',
+  '{': '}',
+  '}': '{',
+};
+
+// Rebuilds one visual PDF line into logical reading order. Handles PDFs that
+// emit each character as its own item, in visual (reversed) Hebrew order,
+// with fake-bold double-drawn glyphs.
+function reconstructPdfLine(items) {
+  items.sort((a, b) => a.x - b.x);
+
+  // Drop fake-bold duplicates: same text drawn twice at (almost) the same x.
+  const glyphs = [];
+  for (const item of items) {
+    const prev = glyphs[glyphs.length - 1];
+    if (
+      prev &&
+      prev.str === item.str &&
+      Math.abs(item.x - prev.x) < Math.max(1, prev.w * 0.6)
+    ) {
+      continue;
+    }
+    glyphs.push(item);
+  }
+
+  // Insert spaces based on horizontal gaps between adjacent glyphs.
+  const seq = [];
+  for (let i = 0; i < glyphs.length; i++) {
+    if (i > 0) {
+      const prev = glyphs[i - 1];
+      const gap = glyphs[i].x - (prev.x + prev.w);
+      const charW = Math.max(prev.w / Math.max(prev.str.length, 1), 2);
+      if (gap > charW * 0.4) seq.push(' ');
+    }
+    seq.push(...glyphs[i].str);
+  }
+
+  const joined = seq.join('').replace(/\s+/g, ' ').trim();
+  if (!/[֐-׿]/.test(joined)) return joined;
+
+  // Character-fragmented lines (one item per glyph) mean the PDF stores the
+  // text in visual order — reverse it, then restore LTR runs (Latin/digits).
+  const avgLen =
+    glyphs.reduce((s, g) => s + g.str.trim().length, 0) / Math.max(glyphs.length, 1);
+  if (glyphs.length < 4 || avgLen > 2) return joined;
+
+  const rev = [...seq].reverse();
+  const out = [];
+  const isLtrChar = (c) => /[A-Za-z0-9]/.test(c);
+  const isLtrJoin = (c) => /[()[\].,;:+\-*/=_%'"<>!?#&]/.test(c);
+  let i = 0;
+  while (i < rev.length) {
+    if (isLtrChar(rev[i])) {
+      let j = i;
+      let lastStrong = i;
+      while (
+        j < rev.length &&
+        (isLtrChar(rev[j]) || isLtrJoin(rev[j]) || rev[j] === ' ')
+      ) {
+        if (isLtrChar(rev[j])) lastStrong = j;
+        j++;
+      }
+      // Include trailing punctuation only up to the last strong LTR char,
+      // so Hebrew sentence punctuation isn't swallowed.
+      out.push(...rev.slice(i, lastStrong + 1).reverse());
+      i = lastStrong + 1;
+    } else {
+      // Brackets rendered in the RTL segments are mirrored by the reversal.
+      out.push(BRACKET_MIRROR[rev[i]] || rev[i]);
+      i++;
+    }
+  }
+  return out.join('').replace(/\s+/g, ' ').trim();
 }

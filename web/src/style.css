@@ -275,6 +275,10 @@ main {
 
 /* --- lightbox --- */
 
+.lightbox[hidden] {
+  display: none;
+}
+
 .lightbox {
   position: fixed;
   inset: 0;
@@ -297,10 +301,48 @@ main {
 /* --- settings / actions --- */
 
 .settings {
-  margin-top: 28px;
+  position: sticky;
+  top: 10px;
+  z-index: 20;
+  margin: 16px 0 6px;
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 14px 18px;
+  box-shadow: 0 6px 22px -8px rgb(60 50 30 / 0.28);
+}
+
+.settings .field {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings .field input {
+  padding: 8px 10px;
+  width: 150px;
+}
+
+.settings .actions {
+  gap: 8px;
+}
+
+.settings button.primary,
+.settings button.secondary,
+.settings button.ghost {
+  padding: 9px 18px;
+  font-size: 0.93rem;
+}
+
+.q-flag {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #fdf3e7;
+  border: 1px solid rgb(201 138 27 / 0.45);
+  color: #8a5c0d;
+  font-size: 0.88rem;
 }
 
 .field {

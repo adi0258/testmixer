@@ -81,3 +81,4 @@ web/dist/
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+web/public/debug/

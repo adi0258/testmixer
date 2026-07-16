@@ -43,22 +43,20 @@
             תמונה כדי להגדיל אותה.
           </p>
         </div>
-        <div id="question-list" class="question-list"></div>
-
         <div class="settings card">
+          <div class="actions">
+            <button id="simulate-btn" class="primary">🎓 התחל סימולציה</button>
+            <button id="generate-btn" class="secondary">⬇ מבחן מעורבב + תשובון</button>
+            <button id="reset-btn" class="ghost">איפוס</button>
+          </div>
           <label class="field">
             <span>שם המבחן</span>
             <input type="text" id="exam-title" value="מבחן" />
           </label>
-          <div class="actions">
-            <button id="simulate-btn" class="primary">🎓 התחל סימולציה</button>
-            <button id="generate-btn" class="secondary">
-              ⬇ הורדת מבחן מעורבב + תשובון
-            </button>
-            <button id="reset-btn" class="ghost">איפוס המאגר</button>
-          </div>
           <p id="generate-status" class="generate-status"></p>
         </div>
+
+        <div id="question-list" class="question-list"></div>
       </section>
 
       <section id="simulator" hidden>
