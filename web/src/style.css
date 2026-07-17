@@ -345,6 +345,32 @@ main {
   font-size: 0.88rem;
 }
 
+.q-fixed {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  border: 1px solid rgb(14 117 105 / 0.35);
+  color: var(--accent-deep);
+  font-size: 0.88rem;
+}
+
+.inline-code {
+  display: inline-block;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.86em;
+  background: #eef1e8;
+  border: 1px solid #d8dfcd;
+  border-radius: 6px;
+  padding: 1px 6px;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  margin: 2px 1px;
+  vertical-align: middle;
+}
+
 .field {
   display: flex;
   flex-direction: column;

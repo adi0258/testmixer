@@ -5,6 +5,11 @@ import { exportAll } from './export.js';
 import { initSimulator, startSimulation } from './simulator.js';
 import { imageStrip } from './lightbox.js';
 import { questionKey } from './question-key.js';
+import { renderWithCode } from './code-format.js';
+
+// A valid multiple-choice question in this app always has at least 4
+// options; fewer means the extraction lost or misplaced an answer.
+const MIN_OPTIONS = 4;
 
 const HEB_LETTERS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז'];
 
@@ -88,13 +93,19 @@ async function handleFiles(files) {
 }
 
 // Asks ChatGPT to sanity-check freshly added questions: do the options
-// logically belong to their question? Flags suspicious ones in the UI.
+// logically belong to their question, and is anything missing/misplaced
+// (e.g. an answer that got glued onto the question text)? When ChatGPT can
+// confidently reconstruct a broken question it returns a fix, which is
+// applied automatically; otherwise the question is flagged for the user to
+// review. Anything that still has fewer than MIN_OPTIONS afterwards is
+// removed — this app's exams never have fewer than 4 real answers.
 async function validateNewQuestions(statusParts) {
   const pending = questions.filter((q) => q.checked === undefined);
   if (!pending.length) return;
   pending.forEach((q) => (q.checked = false));
 
   const BATCH = 8;
+  let fixed = 0;
   let flagged = 0;
   let failed = false;
   for (let i = 0; i < pending.length; i += BATCH) {
@@ -122,8 +133,22 @@ async function validateNewQuestions(statusParts) {
         if (!q) continue;
         q.checked = true;
         if (check.ok === false) {
-          q.flag = check.issue || 'ייתכן שהשאלה חולצה לא נכון';
-          flagged++;
+          const fix = check.fix;
+          const fixOptions = Array.isArray(fix?.options)
+            ? fix.options.map((t) => String(t).trim()).filter(Boolean)
+            : [];
+          if (fix?.text && fixOptions.length >= MIN_OPTIONS) {
+            seenKeys.delete(questionKey(q));
+            q.text = String(fix.text).trim();
+            q.options = fixOptions.map((text) => ({ text, correct: false }));
+            seenKeys.add(questionKey(q));
+            q.flag = null;
+            q.autoFixed = true;
+            fixed++;
+          } else {
+            q.flag = check.issue || 'ייתכן שהשאלה חולצה לא נכון';
+            flagged++;
+          }
         }
       }
     } catch (err) {
@@ -133,13 +158,28 @@ async function validateNewQuestions(statusParts) {
     }
   }
 
+  // Hard rule enforced after validation (and any auto-fix attempt): drop
+  // anything that still has fewer than MIN_OPTIONS real answers.
+  let removed = 0;
+  questions = questions.filter((q) => {
+    if (q.checked && q.options.length < MIN_OPTIONS) {
+      seenKeys.delete(questionKey(q));
+      removed++;
+      return false;
+    }
+    return true;
+  });
+
   render();
-  const suffix = failed
-    ? 'בדיקת האיכות לא הושלמה (שגיאת רשת/API)'
-    : flagged
-      ? `⚠️ ChatGPT סימן ${flagged} שאלות חשודות — כדאי לעבור עליהן ולמחוק את השגויות`
-      : '✅ ChatGPT אישר: כל השאלות נראות תקינות';
-  showStatus(`${statusParts.join(' · ')} · ${suffix}`, false);
+  const bits = [];
+  if (fixed) bits.push(`🛠️ ChatGPT שיחזר אוטומטית ${fixed} שאלות עם תשובה חסרה/מוזזת`);
+  if (removed) {
+    bits.push(`🗑️ ${removed} שאלות הוסרו כי נותרו עם פחות מ-${MIN_OPTIONS} תשובות תקינות`);
+  }
+  if (flagged) bits.push(`⚠️ ${flagged} שאלות עדיין מסומנות כחשודות — כדאי לבדוק ולמחוק ידנית`);
+  if (failed) bits.push('בדיקת האיכות לא הושלמה (שגיאת רשת/API)');
+  if (!fixed && !removed && !flagged && !failed) bits.push('✅ ChatGPT אישר: כל השאלות נראות תקינות');
+  showStatus(`${statusParts.join(' · ')} · ${bits.join(' · ')}`, false);
 }
 
 function showStatus(msg, isError) {
@@ -171,7 +211,7 @@ function renderQuestion(q, qi) {
 
   const qText = document.createElement('div');
   qText.className = 'q-text';
-  qText.textContent = q.text;
+  renderWithCode(qText, q.text);
 
   const del = document.createElement('button');
   del.className = 'q-delete';
@@ -185,6 +225,13 @@ function renderQuestion(q, qi) {
 
   head.append(num, qText, del);
   card.append(head);
+
+  if (q.autoFixed) {
+    const fixedNote = document.createElement('div');
+    fixedNote.className = 'q-fixed';
+    fixedNote.textContent = '🛠️ ChatGPT שיחזר כאן תשובה שהייתה חסרה או מודבקת לשאלה';
+    card.append(fixedNote);
+  }
 
   if (q.flag) {
     const flag = document.createElement('div');
@@ -215,7 +262,7 @@ function renderQuestion(q, qi) {
 
     const optText = document.createElement('div');
     optText.className = 'opt-text';
-    optText.textContent = opt.text;
+    renderWithCode(optText, opt.text);
 
     row.append(correct, letter, optText);
     card.append(row);

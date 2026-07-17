@@ -5,6 +5,7 @@
 
 import { imageStrip } from './lightbox.js';
 import { questionKey } from './question-key.js';
+import { renderWithCode } from './code-format.js';
 
 const SIM_SIZE = 10;
 const HEB_LETTERS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז'];
@@ -98,7 +99,7 @@ function renderQuestions() {
       num.textContent = q.id;
       const text = document.createElement('div');
       text.className = 'sim-q-text';
-      text.textContent = q.text;
+      renderWithCode(text, q.text);
       head.append(num, text);
       card.append(head);
 
@@ -119,7 +120,7 @@ function renderQuestions() {
         letter.textContent = `${HEB_LETTERS[oi] ?? oi + 1}.`;
         const txt = document.createElement('span');
         txt.className = 'opt-body';
-        txt.textContent = opt;
+        renderWithCode(txt, opt);
         row.append(radio, letter, txt);
         card.append(row);
       });
@@ -213,10 +214,10 @@ function showResults(answers) {
       <div class="sim-result-detail">התשובה שלך: <span></span></div>
       <div class="sim-result-detail">התשובה הנכונה: <span></span>${lowConfidence ? ' <em>(המודל לא בטוח)</em>' : ''}</div>
     `;
-    item.querySelector('strong').textContent = `${q.id}. ${q.text}`;
+    renderWithCode(item.querySelector('strong'), `${q.id}. ${q.text}`);
     const spans = item.querySelectorAll('.sim-result-detail span');
-    spans[0].textContent = yourAnswer;
-    spans[1].textContent = correctAnswer;
+    renderWithCode(spans[0], yourAnswer);
+    renderWithCode(spans[1], correctAnswer);
     list.append(item);
   }
 

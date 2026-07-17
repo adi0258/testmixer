@@ -20,11 +20,20 @@ const LINE_QUESTION_WORD_RE =
 const BARE_LETTER_RE = /^([אבגדהוז])['׳]?$/;
 const LINE_OPTION_RE = /^(\*?)\s*([אבגדהוז]|[a-fA-F])\s*['׳]?\s*[.):]\s+(.*)$/;
 const LATIN_OPTION_RE = /^(\*?)\s*([a-fA-F])\s*[.):]\s+(.*)$/;
+// Note: uses a Unicode lookahead instead of \b — \b is defined via \w, which
+// does not include Hebrew letters, so it silently fails to match a boundary
+// between two Hebrew/punctuation characters (e.g. "תשובה נכונה: ב.").
 const ANSWER_LINE_RE =
-  /^ה?תשובה(?:\s+ה?נכונה)?\s*[:\-]\s*([אבגדהוזa-fA-F])(?:\b|$)/;
+  /^ה?תשובה(?:\s+ה?נכונה)?\s*[:\-]\s*([אבגדהוזa-fA-F])(?![\p{L}\p{N}])/u;
 // Inline markers that may appear mid-line in merged paragraphs:
 // Hebrew option letters ("א." "ב)") or question numbers ("3.").
 const MID_MARKER_RE = /(?:^|\s)(?:(\*?)([אבגדהוז])['׳]?|(\d{1,3}))[.)](?=\s|$)/g;
+
+// An administrative note about exam structure (e.g. "questions 8-9 are a
+// block, don't shuffle them apart") that sometimes gets swallowed as if it
+// were a trailing answer option — it never is one and must be dropped.
+const BLOCK_NOTE_RE =
+  /^שאלות?\s+\d+(?:\s*[,ו]\s*\d+)*\s+(?:הן|הינן|הוא|הינה|היא)\s+בלוק/;
 
 function letterIndex(letter) {
   const heb = HEB_LETTERS.indexOf(letter);
@@ -256,7 +265,7 @@ export function parseQuestions(lines) {
   // Drop empty options, ensure at most one correct option per question.
   const clean = [];
   for (const q of questions) {
-    q.options = q.options.filter((o) => o.text);
+    q.options = q.options.filter((o) => o.text && !BLOCK_NOTE_RE.test(o.text));
     // Strip a leftover points annotation ("10 נק'") from the question head.
     q.text = q.text.replace(/^[\s()]*\d{0,3}\s*נק['׳]?[\s()]*/, '').trim();
     if (!q.text || q.options.length < 2) continue;
