@@ -4,6 +4,7 @@ import { generateVersions } from './shuffle.js';
 import { exportAll } from './export.js';
 import { initSimulator, startSimulation } from './simulator.js';
 import { imageStrip } from './lightbox.js';
+import { questionKey } from './question-key.js';
 
 const HEB_LETTERS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז'];
 
@@ -19,12 +20,6 @@ const generateStatus = document.getElementById('generate-status');
 
 let questions = [];
 const seenKeys = new Set();
-
-// Normalized fingerprint used to drop duplicate questions across files
-// (the same exam often appears both as a test file and a solutions file).
-function questionKey(q) {
-  return q.text.replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase();
-}
 
 // --- file intake -----------------------------------------------------------
 

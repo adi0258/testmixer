@@ -4,6 +4,7 @@
 // marking is never trusted).
 
 import { imageStrip } from './lightbox.js';
+import { questionKey } from './question-key.js';
 
 const SIM_SIZE = 10;
 const HEB_LETTERS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז'];
@@ -41,10 +42,25 @@ export function initSimulator({ onExit: exitCb, getPool: poolCb }) {
   els.finish.addEventListener('click', finishSimulation);
 }
 
+// Drops questions whose normalized text collides with one already kept, so
+// two near-duplicate entries (e.g. from an exam file and its matching
+// solutions file) can never both be drawn into the same simulation.
+function dedupeByKey(pool) {
+  const seen = new Set();
+  const unique = [];
+  for (const q of pool) {
+    const key = questionKey(q);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(q);
+  }
+  return unique;
+}
+
 export function startSimulation(pool) {
-  // Each simulation: up to 10 random questions, options reshuffled so the
-  // original order gives nothing away. Images travel with their question.
-  simQuestions = shuffle(pool)
+  // Each simulation: up to 10 random UNIQUE questions, options reshuffled so
+  // the original order gives nothing away. Images travel with their question.
+  simQuestions = shuffle(dedupeByKey(pool))
     .slice(0, SIM_SIZE)
     .map((q, i) => ({
       id: i + 1,
