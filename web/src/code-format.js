@@ -49,6 +49,12 @@ const TOKEN_RE = new RegExp(
 // identifiers, or short comma-separated lists — not lowercase sentences).
 function looksLikeProseArgs(callText) {
   const args = callText.slice(callText.indexOf('(') + 1, callText.lastIndexOf(')'));
+  // Comparison/logical/compound-assignment operators are a strong "this is
+  // real code" signal that overrides the word-count heuristic below — plain
+  // English parentheticals essentially never contain "!=", "&&", etc., even
+  // when (like "if((val != prev_val) && (val))") they also happen to
+  // contain 3+ lowercase identifier words such as "val" and "prev_val".
+  if (/[!=<>]=|&&|\|\||[+\-*/%]=|\+\+|--/.test(args)) return false;
   const words = args.match(/[A-Za-z]+/g) || [];
   const proseWords = words.filter((w) => w.length >= 2 && w === w.toLowerCase());
   return proseWords.length >= 3;
