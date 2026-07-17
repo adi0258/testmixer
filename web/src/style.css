@@ -195,6 +195,11 @@ main {
   padding-top: 4px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  /* Per-run bidi direction instead of forcing the whole (RTL) paragraph
+     direction onto embedded Latin/code substrings that our code-detection
+     didn't happen to wrap — without this, a plain-text English/code run
+     sitting inside Hebrew prose can visually reorder its words. */
+  unicode-bidi: plaintext;
 }
 
 .q-delete {
@@ -250,6 +255,7 @@ main {
   flex: 1;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
 }
 
 .q-images {
@@ -371,6 +377,27 @@ main {
   vertical-align: middle;
 }
 
+.code-block {
+  display: block;
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: start;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.86em;
+  background: #eef1e8;
+  border: 1px solid #d8dfcd;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 10px 0;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: inherit;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -472,6 +499,7 @@ button.ghost:hover {
   padding-top: 4px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
 }
 
 .sim-opt {
@@ -508,6 +536,7 @@ button.ghost:hover {
 .sim-opt .opt-body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
 }
 
 .sim-actions {
@@ -555,6 +584,7 @@ button.ghost:hover {
 .sim-result-head {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
 }
 
 .sim-result-detail {
@@ -563,6 +593,7 @@ button.ghost:hover {
   margin-top: 5px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
 }
 
 /* --- footer --- */
