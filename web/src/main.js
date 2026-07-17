@@ -114,46 +114,72 @@ async function validateNewQuestions(statusParts) {
       `${statusParts.join(' · ')} · 🔍 ChatGPT בודק התאמה בין שאלות לתשובות… (${Math.min(i + BATCH, pending.length)}/${pending.length})`,
       false,
     );
-    try {
-      const res = await fetch('/api/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          questions: batch.map((q, bi) => ({
-            id: bi + 1,
-            text: q.text,
-            options: q.options.map((o) => o.text),
-          })),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      for (const check of data.checks) {
-        const q = batch[check.id - 1];
-        if (!q) continue;
-        q.checked = true;
-        if (check.ok === false) {
-          const fix = check.fix;
-          const fixOptions = Array.isArray(fix?.options)
-            ? fix.options.map((t) => String(t).trim()).filter(Boolean)
-            : [];
-          if (fix?.text && fixOptions.length >= MIN_OPTIONS) {
-            seenKeys.delete(questionKey(q));
-            q.text = String(fix.text).trim();
-            q.options = fixOptions.map((text) => ({ text, correct: false }));
-            seenKeys.add(questionKey(q));
-            q.flag = null;
-            q.autoFixed = true;
-            fixed++;
-          } else {
-            q.flag = check.issue || 'ייתכן שהשאלה חולצה לא נכון';
-            flagged++;
+
+    // Retry once before giving up — a transient failure must not silently
+    // strand these questions forever: anything not marked checked=true below
+    // is reset to undefined so a future upload picks it up again instead of
+    // permanently skipping validation.
+    let batchOk = false;
+    for (let attempt = 0; attempt < 2 && !batchOk; attempt++) {
+      try {
+        const res = await fetch('/api/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            questions: batch.map((q, bi) => ({
+              id: bi + 1,
+              text: q.text,
+              options: q.options.map((o) => o.text),
+            })),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        for (const check of data.checks) {
+          const q = batch[check.id - 1];
+          if (!q) continue;
+          q.checked = true;
+          if (check.ok === false) {
+            const fix = check.fix;
+            const fixOptions = Array.isArray(fix?.options)
+              ? fix.options.map((t) => String(t).trim()).filter(Boolean)
+              : [];
+            if (fix?.text && fixOptions.length >= MIN_OPTIONS) {
+              // Reused option text keeps whatever correct-marking it already
+              // had (e.g. detected from bold text in the source document);
+              // only genuinely new/reconstructed text starts unmarked.
+              const wasCorrect = new Set(
+                q.options.filter((o) => o.correct).map((o) => o.text.trim()),
+              );
+              seenKeys.delete(questionKey(q));
+              q.text = String(fix.text).trim();
+              q.options = fixOptions.map((text) => ({
+                text,
+                correct: wasCorrect.has(text.trim()),
+              }));
+              seenKeys.add(questionKey(q));
+              q.flag = null;
+              q.autoFixed = true;
+              fixed++;
+            } else {
+              q.flag = check.issue || 'ייתכן שהשאלה חולצה לא נכון';
+              flagged++;
+            }
           }
         }
+        batchOk = true;
+      } catch (err) {
+        console.error(`validate failed (attempt ${attempt + 1}):`, err);
       }
-    } catch (err) {
-      console.error('validate failed:', err);
+    }
+
+    if (!batchOk) {
       failed = true;
+      // This batch and anything after it stay unvalidated for now — mark
+      // them retryable rather than leaving them stuck at checked=false.
+      for (const q of pending.slice(i)) {
+        if (q.checked !== true) q.checked = undefined;
+      }
       break;
     }
   }
@@ -177,7 +203,9 @@ async function validateNewQuestions(statusParts) {
     bits.push(`🗑️ ${removed} שאלות הוסרו כי נותרו עם פחות מ-${MIN_OPTIONS} תשובות תקינות`);
   }
   if (flagged) bits.push(`⚠️ ${flagged} שאלות עדיין מסומנות כחשודות — כדאי לבדוק ולמחוק ידנית`);
-  if (failed) bits.push('בדיקת האיכות לא הושלמה (שגיאת רשת/API)');
+  if (failed) {
+    bits.push('בדיקת האיכות לא הושלמה לכל השאלות (שגיאת רשת/API) — הבדיקה תושלם אוטומטית בהעלאה הבאה');
+  }
   if (!fixed && !removed && !flagged && !failed) bits.push('✅ ChatGPT אישר: כל השאלות נראות תקינות');
   showStatus(`${statusParts.join(' · ')} · ${bits.join(' · ')}`, false);
 }

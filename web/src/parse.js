@@ -33,7 +33,7 @@ const MID_MARKER_RE = /(?:^|\s)(?:(\*?)([אבגדהוז])['׳]?|(\d{1,3}))[.)](?
 // block, don't shuffle them apart") that sometimes gets swallowed as if it
 // were a trailing answer option — it never is one and must be dropped.
 const BLOCK_NOTE_RE =
-  /^שאלות?\s+\d+(?:\s*[,ו]\s*\d+)*\s+(?:הן|הינן|הוא|הינה|היא)\s+בלוק/;
+  /^שאל(?:ה|ות)\s+\d+(?:\s*[,ו]\s*\d+)*\s+(?:הן|הינן|הוא|הינה|היא)\s+בלוק/;
 
 function letterIndex(letter) {
   const heb = HEB_LETTERS.indexOf(letter);

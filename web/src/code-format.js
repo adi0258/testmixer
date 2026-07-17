@@ -3,7 +3,12 @@
 // LTR style — so a snippet like "analogWrite(9, 255);" reads clearly
 // instead of blending into the surrounding Hebrew RTL prose.
 
-const CODE_TOKEN = String.raw`(?:\b(?:void|int|float|double|bool|char|String|const)\b|[{}]|;|[A-Za-z_][\w.]*\s*\([^()]*\))`;
+// Function-call arguments, allowing one level of nested calls (e.g.
+// Serial.println(digitalRead(2))) — common in this app's Arduino/C exams.
+// Not a full recursive balanced-paren matcher (regex can't do unbounded
+// nesting), but one level covers realistic exam code.
+const CALL_ARGS = String.raw`[^()]*(?:\([^()]*\)[^()]*)*`;
+const CODE_TOKEN = String.raw`(?:\b(?:void|int|float|double|bool|char|String|const)\b|[{}]|;|[A-Za-z_][\w.]*\s*\(${CALL_ARGS}\))`;
 const CODE_RUN_RE = new RegExp(`${CODE_TOKEN}(?:\\s*${CODE_TOKEN})*`, 'g');
 
 // Splits text into an array of {text, code:boolean} segments.
