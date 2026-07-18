@@ -22,6 +22,31 @@ function shuffled(array, rand) {
   return a;
 }
 
+// Groups question indices into shuffle-atomic units: a declared block
+// ("questions 8, 9 are a block") becomes one unit whose members always stay
+// adjacent and in their original relative order — a question that only
+// makes sense together with its predecessor (shares a diagram/code, or says
+// "as described above") must never be shuffled apart from it. Standalone
+// questions are singleton units.
+function buildUnits(questions) {
+  const unitByBlock = new Map();
+  const units = [];
+  questions.forEach((q, i) => {
+    if (q.blockId) {
+      let unit = unitByBlock.get(q.blockId);
+      if (!unit) {
+        unit = [];
+        unitByBlock.set(q.blockId, unit);
+        units.push(unit);
+      }
+      unit.push(i);
+    } else {
+      units.push([i]);
+    }
+  });
+  return units;
+}
+
 /**
  * @param questions [{text, options:[{text, correct}]}]
  * @param settings  {numVersions, shuffleQuestions, shuffleOptions, pinSpecial}
@@ -35,7 +60,9 @@ export function generateVersions(questions, settings) {
     const rand = mulberry32(baseSeed + v * 7919);
 
     let qOrder = questions.map((_, i) => i);
-    if (settings.shuffleQuestions) qOrder = shuffled(qOrder, rand);
+    if (settings.shuffleQuestions) {
+      qOrder = shuffled(buildUnits(questions), rand).flat();
+    }
 
     const vQuestions = qOrder.map((qi) => {
       const q = questions[qi];

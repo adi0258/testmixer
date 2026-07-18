@@ -314,12 +314,19 @@ export function parseQuestions(lines) {
   // Propagate shared context: a declared block ("questions 1, 2, 3 are a
   // block") commonly means only the first question carries the circuit-
   // diagram/code image while the rest say "as shown above" — merge the
-  // union of every block member's images into all of them.
+  // union of every block member's images into all of them. Also tag every
+  // member with a shared, globally-unique blockId (salted per call so
+  // blocks from different uploaded files never collide when merged into
+  // one pool) — downstream shuffling/simulation code uses this to keep
+  // block members adjacent and never draw one without its context.
   if (blockGroups.length) {
+    const callSalt = Math.random().toString(36).slice(2, 8);
     const byNum = new Map(clean.filter((q) => q.num != null).map((q) => [q.num, q]));
-    for (const nums of blockGroups) {
+    blockGroups.forEach((nums, blockIndex) => {
       const members = nums.map((n) => byNum.get(n)).filter(Boolean);
-      if (members.length < 2) continue;
+      if (members.length < 2) return;
+      const blockId = `${callSalt}-b${blockIndex}`;
+      for (const m of members) m.blockId = blockId;
       const sharedImages = [];
       const seenImages = new Set();
       for (const m of members) {
@@ -333,7 +340,7 @@ export function parseQuestions(lines) {
       if (sharedImages.length) {
         for (const m of members) m.images = sharedImages;
       }
-    }
+    });
   }
 
   return clean;

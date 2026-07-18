@@ -58,18 +58,50 @@ function dedupeByKey(pool) {
   return unique;
 }
 
+// Groups questions into draw-atomic units: a declared block ("questions 8,
+// 9 are a block") only makes sense together — one shares its diagram/code
+// with the other, or the text says "as described above" — so drawing one
+// without the other into a simulation must never happen. Standalone
+// questions are singleton units.
+function buildUnits(pool) {
+  const unitByBlock = new Map();
+  const units = [];
+  for (const q of pool) {
+    if (q.blockId) {
+      let unit = unitByBlock.get(q.blockId);
+      if (!unit) {
+        unit = [];
+        unitByBlock.set(q.blockId, unit);
+        units.push(unit);
+      }
+      unit.push(q);
+    } else {
+      units.push([q]);
+    }
+  }
+  return units;
+}
+
 export function startSimulation(pool) {
-  // Each simulation: up to 10 random UNIQUE questions, options reshuffled so
-  // the original order gives nothing away. Images travel with their question.
-  simQuestions = shuffle(dedupeByKey(pool))
-    .slice(0, SIM_SIZE)
-    .map((q, i) => ({
-      id: i + 1,
-      text: q.text,
-      images: q.images || [],
-      options: shuffle(q.options.map((o) => o.text)),
-      selected: null,
-    }));
+  // Each simulation: up to 10 random UNIQUE questions, drawn whole unit at a
+  // time so a block never gets split across the "in" / "not drawn" line —
+  // this can slightly overshoot SIM_SIZE when a multi-question block
+  // completes the set, which is preferable to showing a question stripped
+  // of the context it depends on. Options are reshuffled so the original
+  // order gives nothing away; images travel with their question.
+  const units = shuffle(buildUnits(dedupeByKey(pool)));
+  const picked = [];
+  for (const unit of units) {
+    if (picked.length >= SIM_SIZE) break;
+    picked.push(...unit);
+  }
+  simQuestions = picked.map((q, i) => ({
+    id: i + 1,
+    text: q.text,
+    images: q.images || [],
+    options: shuffle(q.options.map((o) => o.text)),
+    selected: null,
+  }));
 
   els.section.hidden = false;
   els.results.hidden = true;
@@ -211,13 +243,18 @@ function showResults(answers) {
     const badge = isCorrect ? '✔' : '✘';
     item.innerHTML = `
       <div class="sim-result-head"><span class="sim-badge">${badge}</span> <strong></strong></div>
+    `;
+    renderWithCode(item.querySelector('strong'), `${q.id}. ${q.text}`);
+    if (q.images.length) item.append(imageStrip(q.images));
+    const details = document.createElement('div');
+    details.innerHTML = `
       <div class="sim-result-detail">התשובה שלך: <span></span></div>
       <div class="sim-result-detail">התשובה הנכונה: <span></span>${lowConfidence ? ' <em>(המודל לא בטוח)</em>' : ''}</div>
     `;
-    renderWithCode(item.querySelector('strong'), `${q.id}. ${q.text}`);
-    const spans = item.querySelectorAll('.sim-result-detail span');
+    const spans = details.querySelectorAll('.sim-result-detail span');
     renderWithCode(spans[0], yourAnswer);
     renderWithCode(spans[1], correctAnswer);
+    item.append(...details.children);
     list.append(item);
   }
 
