@@ -1,7 +1,7 @@
 // Version generation: seeded shuffling of questions and options,
 // keeping "all of the above"-style options pinned in place when asked.
 
-import { SPECIAL_OPTION_RE } from './parse.js';
+import { SPECIAL_OPTION_RE, extractComboRef, HEB_LETTERS } from './parse.js';
 
 function mulberry32(seed) {
   return function () {
@@ -20,6 +20,32 @@ function shuffled(array, rand) {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+
+// An option like "תשובות ב, ג נכונות" references OTHER options by letter.
+// Pinning its own position isn't enough — whatever ends up sitting at
+// letters ב/ג after the shuffle is different content, so the reference
+// itself would be silently wrong. Rewrite it to name the NEW letters of
+// whichever original options (by origIndex) it actually pointed to.
+export function rewriteComboRefs(options) {
+  const origIndexToNewPos = new Map(options.map((o, pos) => [o.origIndex, pos]));
+  return options.map((o) => {
+    const ref = extractComboRef(o.text);
+    if (!ref) return o;
+    const newPositions = ref.letters
+      .map((l) => origIndexToNewPos.get(HEB_LETTERS.indexOf(l)))
+      .filter((p) => p != null)
+      .sort((a, b) => a - b);
+    if (newPositions.length < 2) return o;
+    const newLetters = newPositions.map((p) => HEB_LETTERS[p]);
+    // The captured letters span may or may not include its own trailing
+    // space (depends on whether a "," or "ו" followed the last letter) —
+    // strip any leftover leading whitespace from the tail and always join
+    // with exactly one space, rather than risking a doubled-up gap.
+    const tail = o.text.slice(ref.matchEnd).replace(/^\s+/, '');
+    const text = o.text.slice(0, ref.matchStart) + newLetters.join(', ') + ' ' + tail;
+    return { ...o, text };
+  });
 }
 
 // Groups question indices into shuffle-atomic units: a declared block
@@ -82,6 +108,7 @@ export function generateVersions(questions, settings) {
         for (let i = 0; i < q.options.length; i++) {
           options.push(pinned.has(i) ? pinned.get(i) : mixed.shift());
         }
+        options = rewriteComboRefs(options);
       }
       // Images stay glued to their question — the whole unit moves together.
       return { origNum: qi + 1, text: q.text, images: q.images || [], options };

@@ -10,7 +10,7 @@
 // Correct-answer detection: leading "*", a fully-bold option line, or a
 // "תשובה נכונה: ב" line after the question.
 
-const HEB_LETTERS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז'];
+export const HEB_LETTERS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז'];
 const LAT_LETTERS = ['a', 'b', 'c', 'd', 'e', 'f'];
 
 const LINE_QUESTION_WORD_RE =
@@ -44,6 +44,34 @@ const BLOCK_NOTE_RE =
 
 function parseBlockNums(matchGroup) {
   return (matchGroup.match(/\d+/g) || []).map(Number);
+}
+
+// "תשובות ב, ג נכונות" / "תשובות ב ו-ג נכונות בלבד" style options reference
+// OTHER options by letter. Shuffling reorders every option, so those
+// letters silently stop pointing at the same content unless the text is
+// rewritten to match the new order — see the caller in shuffle.js. This is
+// intentionally NOT resolved at parse time and tied to the option object,
+// since the text can still change afterwards (e.g. a ChatGPT auto-fix
+// rebuilds the options array from plain strings) — callers re-detect this
+// fresh from whatever the current text is.
+const COMBO_REF_RE =
+  /תשוב(?:ה|ות)\s+((?:[אבגדהוז](?:['׳])?(?:\s*[,ו]-?\s*)?)+)(?=\s*(?:נכונ|בלבד|תקינ))/;
+
+export function extractComboRef(text) {
+  const m = text.match(COMBO_REF_RE);
+  if (!m) return null;
+  // "ו" is ambiguous between the conjunction ("X ו-Y") and option letter #6
+  // — real option sets essentially never reach a 6th option, so it is
+  // always treated as the connector here, never as a referenced letter.
+  const letters = m[1].match(/[אבגדהז]/g);
+  if (!letters || letters.length < 2) return null;
+  // The letters group (m[1]) is immediately followed by a zero-width
+  // lookahead, so it is exactly the tail of the full match — this gives its
+  // span without needing the regex 'd' flag. Only THIS span (not the
+  // leading "תשובות " word) should ever be replaced by a caller.
+  const matchEnd = m.index + m[0].length;
+  const matchStart = matchEnd - m[1].length;
+  return { matchStart, matchEnd, letters };
 }
 
 function letterIndex(letter) {

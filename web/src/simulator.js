@@ -6,6 +6,7 @@
 import { imageStrip } from './lightbox.js';
 import { questionKey } from './question-key.js';
 import { renderWithCode } from './code-format.js';
+import { rewriteComboRefs } from './shuffle.js';
 
 const SIM_SIZE = 10;
 const HEB_LETTERS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז'];
@@ -95,13 +96,21 @@ export function startSimulation(pool) {
     if (picked.length >= SIM_SIZE) break;
     picked.push(...unit);
   }
-  simQuestions = picked.map((q, i) => ({
-    id: i + 1,
-    text: q.text,
-    images: q.images || [],
-    options: shuffle(q.options.map((o) => o.text)),
-    selected: null,
-  }));
+  simQuestions = picked.map((q, i) => {
+    // Track origIndex through the shuffle so a "תשובות ב, ג נכונות"-style
+    // option can be rewritten to name the new letters of whatever it
+    // actually referenced — otherwise the reference silently breaks once
+    // the options are reordered.
+    const withOrig = q.options.map((o, oi) => ({ ...o, origIndex: oi }));
+    const options = rewriteComboRefs(shuffle(withOrig)).map((o) => o.text);
+    return {
+      id: i + 1,
+      text: q.text,
+      images: q.images || [],
+      options,
+      selected: null,
+    };
+  });
 
   els.section.hidden = false;
   els.results.hidden = true;
