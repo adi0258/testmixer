@@ -3,7 +3,7 @@
 // Used by both the Vercel serverless function and the Vite dev middleware.
 
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
-const MODEL = 'gpt-4o-mini';
+const MODEL = 'gpt-4o';
 // Validation needs more careful judgment than grading (it must avoid false
 // positives on legitimate questions), so it uses the stronger model.
 const VALIDATE_MODEL = 'gpt-4o';
