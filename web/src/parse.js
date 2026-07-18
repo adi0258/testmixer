@@ -29,11 +29,22 @@ const ANSWER_LINE_RE =
 // Hebrew option letters ("א." "ב)") or question numbers ("3.").
 const MID_MARKER_RE = /(?:^|\s)(?:(\*?)([אבגדהוז])['׳]?|(\d{1,3}))[.)](?=\s|$)/g;
 
-// An administrative note about exam structure (e.g. "questions 8-9 are a
-// block, don't shuffle them apart") that sometimes gets swallowed as if it
-// were a trailing answer option — it never is one and must be dropped.
+// An administrative note about exam structure ("questions 1, 2, 3 are a
+// block, don't shuffle them apart") that sometimes appears as its own
+// preamble line and sometimes gets swallowed as if it were a trailing
+// answer option — it is never a real answer and must be dropped. The
+// captured group lets the parser also read WHICH questions share context:
+// such a block commonly means only the first question carries the shared
+// circuit-diagram/code image, while the rest just say "as shown above" —
+// so that image must be propagated to every question in the block, or a
+// later member drawn on its own (e.g. in the simulator) shows no image at
+// all for a question that depends on it.
 const BLOCK_NOTE_RE =
-  /^שאל(?:ה|ות)\s+\d+(?:\s*[,ו]\s*\d+)*\s+(?:הן|הינן|הוא|הינה|היא)\s+בלוק/;
+  /^שאל(?:ה|ות)\s+((?:\d+(?:\s*[,ו]\s*\d+)*))\s+(?:הן|הינן|הוא|הינה|היא)\s+בלוק/;
+
+function parseBlockNums(matchGroup) {
+  return (matchGroup.match(/\d+/g) || []).map(Number);
+}
 
 function letterIndex(letter) {
   const heb = HEB_LETTERS.indexOf(letter);
@@ -50,6 +61,9 @@ export function parseQuestions(lines) {
   // them: the open question, or the next one if the current one is done.
   let bufferedImages = [];
   const groupRoles = new Map();
+  // Each entry: an array of original question numbers that share context
+  // (and therefore should share each other's images) — see BLOCK_NOTE_RE.
+  const blockGroups = [];
 
   const flushImagesTo = (target) => {
     if (bufferedImages.length && target) {
@@ -68,7 +82,7 @@ export function parseQuestions(lines) {
 
   const startQuestion = (text, num) => {
     closeCurrent();
-    current = { text: (text || '').trim(), options: [], images: [] };
+    current = { text: (text || '').trim(), options: [], images: [], num: num ?? null };
     flushImagesTo(current);
     if (num != null) lastQNum = num;
     inOptions = false;
@@ -245,6 +259,15 @@ export function parseQuestions(lines) {
     const text = (line.text || '').trim();
     if (!text) continue;
 
+    // A block note as its own standalone preamble line (no option marker
+    // prefix) — the "glued onto a trailing option" form is caught later,
+    // once option markers have been stripped, in the cleanup pass below.
+    const blockMatch = text.match(BLOCK_NOTE_RE);
+    if (blockMatch) {
+      blockGroups.push(parseBlockNums(blockMatch[1]));
+      continue;
+    }
+
     // "תשובה נכונה: ב" — applies to the open question.
     const ansMatch = text.match(ANSWER_LINE_RE);
     if (ansMatch && current && current.options.length) {
@@ -265,7 +288,18 @@ export function parseQuestions(lines) {
   // Drop empty options, ensure at most one correct option per question.
   const clean = [];
   for (const q of questions) {
-    q.options = q.options.filter((o) => o.text && !BLOCK_NOTE_RE.test(o.text));
+    q.options = q.options.filter((o) => {
+      if (!o.text) return false;
+      // The "glued onto a trailing option" form of a block note — capture
+      // its numbers (same as the standalone-line form above) before
+      // dropping it, so the shared image can still be propagated below.
+      const blockMatch = o.text.match(BLOCK_NOTE_RE);
+      if (blockMatch) {
+        blockGroups.push(parseBlockNums(blockMatch[1]));
+        return false;
+      }
+      return true;
+    });
     // Strip a leftover points annotation ("10 נק'") from the question head.
     q.text = q.text.replace(/^[\s()]*\d{0,3}\s*נק['׳]?[\s()]*/, '').trim();
     if (!q.text || q.options.length < 2) continue;
@@ -276,6 +310,32 @@ export function parseQuestions(lines) {
     }
     clean.push(q);
   }
+
+  // Propagate shared context: a declared block ("questions 1, 2, 3 are a
+  // block") commonly means only the first question carries the circuit-
+  // diagram/code image while the rest say "as shown above" — merge the
+  // union of every block member's images into all of them.
+  if (blockGroups.length) {
+    const byNum = new Map(clean.filter((q) => q.num != null).map((q) => [q.num, q]));
+    for (const nums of blockGroups) {
+      const members = nums.map((n) => byNum.get(n)).filter(Boolean);
+      if (members.length < 2) continue;
+      const sharedImages = [];
+      const seenImages = new Set();
+      for (const m of members) {
+        for (const img of m.images) {
+          if (!seenImages.has(img)) {
+            seenImages.add(img);
+            sharedImages.push(img);
+          }
+        }
+      }
+      if (sharedImages.length) {
+        for (const m of members) m.images = sharedImages;
+      }
+    }
+  }
+
   return clean;
 }
 
